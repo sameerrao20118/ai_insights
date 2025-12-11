@@ -11,7 +11,6 @@ from admin_components.manual_add_tab import render_manual_add_tab
 from admin.admin_utils import get_vdb
 from finops.finops_config import load_finops_config
 import json
-from llm.lm_interface import chat_completion
 from models import AIUseCase
 from platform_logic.platform_recommender import recommend_for_usecase
 from llm.prompts import (
@@ -19,6 +18,7 @@ from llm.prompts import (
     LEADER_QA_SYSTEM_PROMPT,
     PROMPT_NOTES,
 )
+import services
 
 APP_NAME = "AI Usage Insights"
 WEIGHT_LABELS = {
@@ -29,12 +29,6 @@ WEIGHT_LABELS = {
     "user_adoption": "User adoption",
     "solution_applicability": "Solution applicability to problem (e.g., dev/CI/CD fit)",
 }
-
-
-def _usecases_to_df(usecases: List[AIUseCase]) -> pd.DataFrame:
-    df = pd.DataFrame([u.model_dump() for u in usecases])
-    return df
-
 
 def _get_prompt(session_key: str, label: str, default: str) -> str:
     if session_key not in st.session_state:
@@ -47,101 +41,6 @@ def _get_decision_factors() -> dict:
     overrides = st.session_state.get("finops_overrides", {})
     merged_weights = {**base_cfg.get("weights", {}), **overrides.get("weights", {})}
     return {**base_cfg, "weights": merged_weights}
-
-
-def _parse_llm_json(raw: str) -> dict:
-    import json
-
-    if isinstance(raw, dict):
-        return {
-            "answer": raw.get("answer"),
-            "explanation": raw.get("explanation"),
-        }
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
-    return {"answer": raw, "explanation": ""}
-
-
-def _normalize_recommendation(raw_rec: Any) -> dict:
-    """Ensure recommendation is a dict with sane defaults."""
-    import json
-
-    rec = raw_rec
-    if isinstance(raw_rec, str):
-        try:
-            rec = json.loads(raw_rec)
-        except Exception:
-            rec = {}
-    if not isinstance(rec, dict):
-        rec = {}
-    rec.setdefault("recommendedPlatform", "")
-    rec.setdefault("recommendedPattern", "")
-    rec.setdefault("summary", "")
-    rec.setdefault("rationale", "")
-    rec.setdefault("riskNotes", "")
-    rec.setdefault("nextSteps", [])
-    return rec
-
-
-from typing import Optional, Tuple, Any
-
-
-def _parse_budget_filter(text: str) -> Tuple[Optional[float], Optional[float]]:
-    """Return (min_budget, max_budget) in GBP based on a loose text hint."""
-    if not text:
-        return (None, None)
-    t = text.lower().replace(",", "").strip()
-    num = None
-    if "m" in t:
-        try:
-            num = float(t.split("m")[0].split()[-1]) * 1_000_000
-        except Exception:
-            num = None
-    elif "k" in t:
-        try:
-            num = float(t.split("k")[0].split()[-1]) * 1_000
-        except Exception:
-            num = None
-    else:
-        import re
-
-        m = re.search(r"([0-9]+(?:\.[0-9]+)?)", t)
-        if m:
-            num = float(m.group(1))
-
-    if num is None:
-        return (None, None)
-
-    if any(token in t for token in ["under", "<", "less", "below"]):
-        return (None, num)
-    if any(token in t for token in [">", "over", "more", "above"]):
-        return (num, None)
-    return (None, None)
-
-
-def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
-    subset = df.copy()
-    ai_type = filters.get("AIType")
-    environment = filters.get("Environment")
-    budget_notes = filters.get("BudgetNotes") or ""
-
-    if ai_type:
-        subset = subset[subset["AIType"] == ai_type]
-    if environment:
-        subset = subset[subset["Environment"] == environment]
-
-    min_budget, max_budget = _parse_budget_filter(budget_notes)
-    if "EstimatedBudgetGBP" in subset:
-        if min_budget is not None:
-            subset = subset[subset["EstimatedBudgetGBP"].fillna(0) >= min_budget]
-        if max_budget is not None:
-            subset = subset[subset["EstimatedBudgetGBP"].fillna(0) <= max_budget]
-
-    return subset
 
 
 def _render_prompt_config() -> None:
@@ -219,121 +118,6 @@ def _render_leader_dashboards(df: pd.DataFrame) -> None:
         st.plotly_chart(benefit_fig, use_container_width=True)
 
 
-def _answer_leader_question(question: str, df: pd.DataFrame, usecases: List[AIUseCase]) -> str:
-    factors = _get_decision_factors()
-    overrun_count = int(df["BudgetOverrun"].fillna(False).sum()) if "BudgetOverrun" in df else 0
-    overrun_rate = (overrun_count / len(df)) if len(df) > 0 else 0.0
-    context = {
-        "metrics": {
-            "total": len(df),
-            "teams": df["Team"].nunique() if "Team" in df else 0,
-            "total_est_budget": float(df["EstimatedBudgetGBP"].fillna(0).sum()) if "EstimatedBudgetGBP" in df else 0.0,
-            "env_mix": df["Environment"].fillna("Unknown").value_counts().to_dict() if "Environment" in df else {},
-            "ai_type_mix": df["AIType"].fillna("Unknown").value_counts().to_dict() if "AIType" in df else {},
-            "benefit_distribution": df["BenefitValuePerAnnum"].dropna().describe().to_dict()
-            if "BenefitValuePerAnnum" in df
-            else {},
-            "roi_distribution": df["ROIPerAnnum"].dropna().describe().to_dict() if "ROIPerAnnum" in df else {},
-            "budget_overrun_count": overrun_count,
-            "budget_overrun_rate": overrun_rate,
-        },
-        "sample_usecases": [u.model_dump() for u in usecases[:12]],
-        "decision_factors": factors,
-        "question": question,
-    }
-    system = _get_prompt("leader_qa_prompt", "Leader Q&A system prompt", LEADER_QA_SYSTEM_PROMPT)
-    user = f"Question: {question}\nCatalogue context:\n{context}"
-    return chat_completion(system, user)
-
-
-def _chat_with_catalogue(question: str, df: pd.DataFrame, usecases: List[AIUseCase], user_filters: dict) -> dict:
-    factors = _get_decision_factors()
-    filtered_df = _apply_filters(df, user_filters)
-    if filtered_df.empty:
-        suggestion = (
-            "No records matched. Try adding AI Type, Environment (Prod/Lower), a budget threshold "
-            "(e.g., 'under 1M'), or include team or benefit keywords."
-        )
-        return {"answer": suggestion, "explanation": suggestion}
-
-    agg_benefit = {}
-    agg_budget = {}
-    if "AIType" in filtered_df and "BenefitValuePerAnnum" in filtered_df:
-        agg_benefit = (
-            filtered_df.groupby("AIType")["BenefitValuePerAnnum"].sum().sort_values(ascending=False).to_dict()
-        )
-    if "AIType" in filtered_df and "EstimatedBudgetGBP" in filtered_df:
-        agg_budget = (
-            filtered_df.groupby("AIType")["EstimatedBudgetGBP"].sum().sort_values(ascending=False).to_dict()
-        )
-
-    overspend = []
-    if agg_benefit and agg_budget:
-        for ai_type, spend in agg_budget.items():
-            benefit = agg_benefit.get(ai_type, 0)
-            if spend > benefit and benefit > 0:
-                overspend.append(
-                    {"ai_type": ai_type, "spend": spend, "benefit": benefit, "note": "Spend exceeds benefit"}
-                )
-
-    filtered_ids = set(filtered_df["UseCaseID"].tolist()) if "UseCaseID" in filtered_df else set()
-    filtered_usecases = [u for u in usecases if u.UseCaseID in filtered_ids] if filtered_ids else usecases
-    sample_usecases = [u.model_dump() for u in filtered_usecases[:12]]
-    metrics = {
-        "count": len(filtered_df),
-        "roi_distribution": filtered_df["ROIPerAnnum"].dropna().describe().to_dict()
-        if "ROIPerAnnum" in filtered_df
-        else {},
-        "budget_overrun_count": int(filtered_df["BudgetOverrun"].fillna(False).sum())
-        if "BudgetOverrun" in filtered_df
-        else 0,
-    }
-
-    payload = {
-        "question": question,
-        "filters": user_filters,
-        "decision_factors": factors,
-        "aggregates": {
-            "benefit_by_ai_type": agg_benefit,
-            "budget_by_ai_type": agg_budget,
-            "overspend_notes": overspend,
-        },
-        "metrics": metrics,
-        "sample_usecases": sample_usecases,
-    }
-
-    system_prompt = _get_prompt("catalogue_chat_prompt", "Catalogue chat system prompt", CATALOGUE_CHAT_SYSTEM_PROMPT)
-    user_prompt = json.dumps(payload, indent=2)
-    raw_reply = chat_completion(system_prompt, user_prompt)
-    parsed = _parse_llm_json(raw_reply)
-    parsed.setdefault(
-        "explanation",
-        {
-            "filters": user_filters,
-            "decision_factors": factors,
-            "aggregates": payload["aggregates"],
-        },
-    )
-    return parsed
-
-
-def _load_all_usecases() -> List[AIUseCase]:
-    vdb = get_vdb()
-    if not vdb:
-        return []
-
-    results = vdb.search_similar("all use cases", k=500)
-    seen = {}
-    for r in results:
-        meta = dict(r["metadata"])
-        if not meta:
-            continue
-        uid = meta.get("UseCaseID")
-        if uid and uid not in seen:
-            seen[uid] = AIUseCase(**meta)
-    return list(seen.values())
-
-
 def _format_last_ingest() -> str:
     ts = st.session_state.get("last_ingest_time")
     count = st.session_state.get("last_ingest_count")
@@ -343,8 +127,141 @@ def _format_last_ingest() -> str:
 
 
 def _render_global_header() -> None:
-    st.title(APP_NAME)
-    st.caption("Bank-wide AI catalogue with leader-ready insights and platform recommendations.")
+    """Renders professional NatWest-branded header with enterprise styling."""
+    
+    # Professional enterprise CSS styling
+    st.markdown("""
+    <style>
+    /* Main header styling */
+    .main-header {
+        background: linear-gradient(135deg, #5A287F 0%, #42166C 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+    
+    .header-logo {
+        height: 50px;
+        width: auto;
+    }
+    
+    .header-title {
+        color: white;
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    
+    .header-subtitle {
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.95rem;
+        margin: 0.25rem 0 0 0;
+    }
+    
+    /* Enhanced sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #F8F9FA;
+    }
+    
+    [data-testid="stSidebar"] .sidebar-content {
+        padding: 1rem;
+    }
+    
+    /* Enhanced metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        color: #5A287F;
+        font-weight: 600;
+    }
+    
+    /* Enhanced tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: #F8F9FA;
+        border-radius: 4px;
+        padding: 0 24px;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #5A287F !important;
+        color: white !important;
+    }
+    
+    /* Enhanced expanders */
+    .streamlit-expanderHeader {
+        background-color: #F8F9FA;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+    
+    /* Professional button styling */
+    .stButton > button {
+        background-color: #5A287F;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        background-color: #42166C;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* Card-like containers */
+    .element-container {
+        background-color: white;
+    }
+    
+    /* Professional spacing */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Render branded header
+    try:
+        header_col1, header_col2 = st.columns([1, 8])
+        with header_col1:
+            st.image("assets/natwest_logo.png", width=140)
+        with header_col2:
+            st.markdown("""
+            <div style="padding-top: 0.5rem;">
+                <h1 style="color: #5A287F; margin: 0; font-size: 2rem; font-weight: 600;">AI Usage Insights</h1>
+                <p style="color: #6C757D; margin: 0.5rem 0 0 0; font-size: 1rem;">Enterprise AI Catalogue & Platform Recommendations</p>
+            </div>
+            """, unsafe_allow_html=True)
+    except Exception:
+        # Fallback if logo not found
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #5A287F 0%, #42166C 100%); 
+                    padding: 1.5rem 2rem; border-radius: 8px; margin-bottom: 2rem; 
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <h1 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">AI Usage Insights</h1>
+            <p style="color: rgba(255, 255, 255, 0.9); margin: 0.25rem 0 0 0; font-size: 0.95rem;">
+                Enterprise AI Catalogue & Platform Recommendations
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Last ingest", _format_last_ingest())
@@ -361,12 +278,12 @@ def render_leader_insights():
     with st.sidebar:
         _render_prompt_config()
 
-    usecases = _load_all_usecases()
+    usecases = services.load_all_usecases()
     if not usecases:
         st.warning("No use-cases found. Go to 'Bulk Import' first.")
         return
 
-    df = _usecases_to_df(usecases)
+    df = services.usecases_to_df(usecases)
     _render_leader_dashboards(df)
 
     st.markdown("### Ask a quick question")
@@ -380,15 +297,22 @@ def render_leader_insights():
         else:
             with st.spinner("Synthesizing an answer from the catalogue..."):
                 try:
-                    raw_answer = _answer_leader_question(leader_q, df, usecases)
-                    parsed = _parse_llm_json(raw_answer)
+                    leader_prompt = st.session_state.get("leader_qa_prompt")
+                    raw_answer = services.answer_leader_question(
+                        leader_q, 
+                        df, 
+                        usecases, 
+                        _get_decision_factors(),
+                        system_prompt_override=leader_prompt
+                    )
+                    parsed = services.parse_llm_json(raw_answer)
                     st.success(parsed.get("answer", raw_answer))
                     expl = parsed.get("explanation")
                     if expl:
                         with st.expander("Show explanation"):
                             st.write(expl)
                 except Exception as exc:  # noqa: BLE001
-                    st.error("Could not generate an answer. Check your OpenAI credentials and try again.")
+                    st.error("Could not generate an answer. Check your OpenAI/Ollama credentials and try again.")
                     st.caption(str(exc))
 
     st.markdown("### Chat with the catalogue")
@@ -411,8 +335,16 @@ def render_leader_insights():
             }
             with st.spinner("Chatting with the catalogue..."):
                 try:
-                    raw_reply = _chat_with_catalogue(chat_q, df, usecases, filters)
-                    parsed = _parse_llm_json(raw_reply)
+                    chat_prompt = st.session_state.get("catalogue_chat_prompt")
+                    raw_reply = services.chat_with_catalogue(
+                        chat_q, 
+                        df, 
+                        usecases, 
+                        filters, 
+                        _get_decision_factors(),
+                        system_prompt_override=chat_prompt
+                    )
+                    parsed = services.parse_llm_json(raw_reply)
                     answer = parsed.get("answer", raw_reply)
                     if not isinstance(answer, str):
                         answer = str(answer)
@@ -423,7 +355,7 @@ def render_leader_insights():
                         with st.expander("Show explanation"):
                             st.write(expl_str)
                 except Exception as exc:  # noqa: BLE001
-                    st.error("Chat request failed. Verify OpenAI credentials and try again.")
+                    st.error("Chat request failed. Verify OpenAI/Ollama credentials and try again.")
                     st.caption(str(exc))
 
     labels = [f"{u.UseCaseID} – {u.UseCaseName} ({u.Team})" for u in usecases]
@@ -493,7 +425,7 @@ def render_leader_insights():
                 BenefitCostPerAnnum=selected.BenefitCostPerAnnum,
             )
             rec_raw = recommend_for_usecase(adhoc_uc, decision_factors=_get_decision_factors())
-            rec = _normalize_recommendation(rec_raw)
+            rec = services.normalize_recommendation(rec_raw)
             platform = rec.get("recommendedPlatform") or "Not provided"
             pattern = rec.get("recommendedPattern") or "Not provided"
 
@@ -522,29 +454,43 @@ def render_leader_insights():
 
 def main():
     st.set_page_config(
-        page_title="AI Usage Insights – AI Catalogue & Platform Advisor",
+        page_title="NatWest | AI Usage Insights",
+        page_icon="🏦",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
 
-    st.sidebar.title(APP_NAME)
-    st.sidebar.info("Refresh the catalogue from Excel, then explore insights and platform recommendations.")
+    st.sidebar.markdown("""
+    <div style="text-align: center; padding: 1rem 0;">
+        <h2 style="color: #5A287F; margin: 0; font-size: 1.5rem; font-weight: 600;">AI Insights Hub</h2>
+        <p style="color: #6C757D; font-size: 0.85rem; margin: 0.5rem 0;">Enterprise Platform</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.info("💡 Navigate using the menu below to explore AI initiatives, import data, and access leadership insights.")
+    
     page = st.sidebar.radio(
-        "Navigate",
+        "📋 Navigation",
         [
-            "Dashboard",
-            "Bulk Import",
-            "Manual Add",
-            "Leader Insights",
+            "📊 Dashboard",
+            "📤 Bulk Import",
+            "➕ Manual Add",
+            "🎯 Leader Insights",
         ],
+        label_visibility="visible"
     )
+    
+    # Extract clean page name (remove emoji)
+    page_clean = page.split(" ", 1)[1] if " " in page else page
 
     _render_global_header()
 
-    if page == "Dashboard":
+    if page_clean == "Dashboard":
         render_dashboard_tab()
-    elif page == "Bulk Import":
+    elif page_clean == "Bulk Import":
         render_bulk_import_tab()
-    elif page == "Manual Add":
+    elif page_clean == "Manual Add":
         render_manual_add_tab()
-    elif page == "Leader Insights":
+    elif page_clean == "Leader Insights":
         render_leader_insights()

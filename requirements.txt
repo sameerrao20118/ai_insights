@@ -28,3 +28,10 @@ isort==5.10.1
 pre-commit-hooks==4.2.0
 nbstripout==0.7.1
 commitizen==3.27.0
+fastapi
+uvicorn
+pydantic-settings
+requests
+langchain
+langchain-core
+langchain-openai

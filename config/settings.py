@@ -1,30 +1,62 @@
-from pathlib import Path
-import os
+from __future__ import annotations
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError as exc:
-    raise ModuleNotFoundError(
-        "python-dotenv is not installed. Install dependencies with the SAME interpreter you use to run Streamlit, "
-        "e.g. `python -m pip install -r requirements.txt`."
-    ) from exc
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-if ENV_PATH.exists():
-    load_dotenv(ENV_PATH)
 
-# --- LLM defaults (OpenAI) ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+class Settings(BaseSettings):
+    """
+    Central configuration for all LLM / embedding / auth settings.
+    Support both Enterprise (Azure/Gemini) and Local (Ollama) modes.
+    """
 
-# --- LLM defaults (Ollama) ---
-OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.2")
-OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+    # --- Mode Selection ---
+    llm_provider: str = Field(default="ollama", alias="LLM_PROVIDER")
 
-# --- Storage / Chroma ---
-CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_store")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ai_usecases")
+    # --- Auth / JWT (Enterprise) ---
+    service_account: str = Field(default="", alias="SERVICE_ACCOUNT")
+    service_account_pass: str = Field(default="", alias="SERVICE_ACCOUNT_PASS")
+    auth_url: str = Field(default="", alias="AUTH_URL")
 
-ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+    # --- Azure OpenAI-like chat gateway (Enterprise) ---
+    llm_api_base: str = Field(default="", alias="LLM_API_BASE")
+    llm_deployment_name: str = Field(default="", alias="LLM_DEPLOYMENT_NAME")
+    llm_api_version: str = Field(
+        default="2024-06-01",
+        alias="LLM_API_VERSION",
+        description="API version for chat completions (Azure/OpenAI).",
+    )
+
+    # --- One-way Embedding gateway (Enterprise) ---
+    embedding_api_base: str = Field(default="", alias="EMBEDDING_API_BASE")
+    embedding_deployment_name: str = Field(default="", alias="EMBEDDING_DEPLOYMENT_NAME")
+    embedding_api_version: str = Field(
+        default="2024-06-01",
+        alias="EMBEDDING_API_VERSION",
+        description="API version for embeddings.",
+    )
+
+    # --- Gemini / Vertex gateway (Enterprise) ---
+    base_url: str = Field(default="", alias="BASE_URL")
+    chat_suffix: str = Field(default="genai/vertexai/gemini-2.5-pro/generateContent", alias="CHAT_SUFFIX")
+
+    # --- Ollama Settings (Local) ---
+    ollama_api_base: str = Field(default="http://localhost:11434/v1", alias="OLLAMA_API_BASE")
+    ollama_chat_model: str = Field(default="llama3.2", alias="OLLAMA_CHAT_MODEL")
+    ollama_embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
+
+    # --- Application-level settings ---
+    chroma_path: str = Field(default="./chroma_store", alias="CHROMA_PATH")
+    collection_name: str = Field(default="ai_usecases", alias="COLLECTION_NAME")
+    environment: str = Field(default="dev", alias="ENVIRONMENT")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+        populate_by_name=True,
+    )
+
+
+settings = Settings()

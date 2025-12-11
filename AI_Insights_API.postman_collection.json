@@ -1,0 +1,170 @@
+{
+    "info": {
+        "name": "AI Usage Insights API",
+        "_postman_id": "ai-insights-collection",
+        "description": "API collection for testing AI Usage Insights endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Health Check",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/health",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "health"
+                    ]
+                },
+                "description": "Verify API server is running"
+            },
+            "response": []
+        },
+        {
+            "name": "Chat - High ROI Projects",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"question\": \"Show me AI projects with high ROI\",\n  \"filters\": {\n    \"environment\": \"Production\",\n    \"ai_type\": \"Generative AI\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/chat",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "chat"
+                    ]
+                },
+                "description": "Query the AI catalogue for high ROI projects"
+            },
+            "response": []
+        },
+        {
+            "name": "Chat - Cost Optimization",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"question\": \"What are the cost optimization opportunities?\",\n  \"filters\": {\n    \"budget_max\": 500000,\n    \"status\": \"In Progress\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/chat",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "chat"
+                    ]
+                },
+                "description": "Find cost optimization opportunities with budget constraints"
+            },
+            "response": []
+        },
+        {
+            "name": "Leader Q&A - Prioritization",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"question\": \"Which AI initiatives should we prioritize for Q1 2025?\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/leader-qa",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "leader-qa"
+                    ]
+                },
+                "description": "Get strategic recommendations for leadership"
+            },
+            "response": []
+        },
+        {
+            "name": "Leader Q&A - Risk Assessment",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"question\": \"What are the highest risk AI projects currently in flight?\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/leader-qa",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "leader-qa"
+                    ]
+                },
+                "description": "Identify high-risk projects for leadership awareness"
+            },
+            "response": []
+        },
+        {
+            "name": "Chat - By Team",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"question\": \"Show me all AI projects from the Data Science team\",\n  \"filters\": {\n    \"team\": \"Data Science\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/chat",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "chat"
+                    ]
+                },
+                "description": "Filter projects by team"
+            },
+            "response": []
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        }
+    ]
+}

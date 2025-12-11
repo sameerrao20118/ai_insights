@@ -11,31 +11,35 @@ except ModuleNotFoundError as exc:  # noqa: F401 - used in __init__ guard
     embedding_functions = None  # type: ignore[assignment]
     chroma_errors = None  # type: ignore[assignment]
 
-from config import CHROMA_PATH, COLLECTION_NAME, OPENAI_EMBEDDING_MODEL, OPENAI_API_KEY
+from config import settings
+from llm.lm_interface import LLMInterface
+from chromadb import Documents, EmbeddingFunction, Embeddings
 
+class CustomEmbeddingFunction(EmbeddingFunction):
+    """Wraps LLMInterface to providing embeddings for Chroma."""
+    def __init__(self):
+        self.llm = LLMInterface()
+
+    def __call__(self, input: Documents) -> Embeddings:
+        return self.llm.embed_texts(input)
 
 class VectorDBManager:
-    """Thin wrapper around ChromaDB with OpenAI embeddings."""
+    """Thin wrapper around ChromaDB with custom embeddings."""
 
     def __init__(self) -> None:
-        if chromadb is None or embedding_functions is None:
+        if chromadb is None:
             raise RuntimeError(
                 "chromadb is not installed in this Python environment. "
                 "Install dependencies with the SAME interpreter you run Streamlit under, e.g.: "
                 "`python3 -m pip install -r requirements.txt`"
             )
-        if not OPENAI_API_KEY:
-            raise RuntimeError("OPENAI_API_KEY is missing. Set it in .env or your environment before starting Streamlit.")
-        self.embedding_api_base: Optional[str] = None
-        self.embedding_deployment: Optional[str] = None
-        # Embeddings use the centrally configured OpenAI model; swap here if moving to Ollama/local embeddings.
-        self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=OPENAI_API_KEY,
-            model_name=OPENAI_EMBEDDING_MODEL,
-        )
-        self.persistent_client = chromadb.PersistentClient(path=CHROMA_PATH)
+        
+        # Use our custom embedding function handling both Ollama and Enterprise
+        self.embedding_function = CustomEmbeddingFunction()
+        
+        self.persistent_client = chromadb.PersistentClient(path=settings.chroma_path)
         self.collection = self.persistent_client.get_or_create_collection(
-            name=COLLECTION_NAME,
+            name=settings.collection_name,
             embedding_function=self.embedding_function,
             metadata={"description": "AI Use Case Catalogue"},
         )

@@ -1,25 +1,238 @@
-from typing import List, Dict, Any, Optional
+from __future__ import annotations
+
+import json
+import logging
+import os
+from typing import Any, Dict, List, Literal, Optional
+
+import requests
+
+# Try modern langchain-core, fallback to legacy schema
+try:
+    from langchain_core.messages import HumanMessage, SystemMessage
+except ImportError:
+    from langchain.schema import HumanMessage, SystemMessage
+
+try:
+    from langchain_openai import AzureChatOpenAI, ChatOpenAI
+except ImportError:
+    # Helpful error for user debug
+    raise ImportError("Please run 'pip install langchain-openai' to use this app.")
+
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
-from config import OPENAI_API_KEY, OPENAI_MODEL
+# Local imports
+try:
+    from auth import delete_token_cache, get_cached_or_new_token
+except ImportError:
+    # Fallback if auth.py is missing/broken in local mode
+    def get_cached_or_new_token(): return "dummy"
+    def delete_token_cache(): pass
 
-_client = OpenAI(api_key=OPENAI_API_KEY)
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
-def chat_completion(
-    system_prompt: str,
-    user_prompt: str,
-    tools: Optional[List[Dict[str, Any]]] = None,
-) -> str:
-    # Swap to an alternative client (e.g., Ollama) here by reading config settings if you prefer local inference.
+# -------------------------------------------------------------------
+#  Pydantic models for JSON-style answers (FinOps / Talk-to-Data)
+# -------------------------------------------------------------------
+
+class LeaderInsightAnswer(BaseModel):
+    """LLM answer for portfolio-level 'leader insights' questions."""
+    answer: str = Field(description="Concise, leader-friendly answer.")
+    explanation: Optional[str] = Field(
+        default=None,
+        description="Brief explanation of how metrics and weights were used.",
+    )
+
+class CatalogueChatAnswer(BaseModel):
+    """LLM answer for catalogue / 'talk to data' questions."""
+    answer: str = Field(description="User-facing explanation / result.")
+    explanation: Optional[str] = Field(
+        default=None,
+        description="Short reasoning, referring to filters, metrics, and weights.",
+    )
+
+# -------------------------------------------------------------------
+#  Custom Gemini (Enterprise)
+# -------------------------------------------------------------------
+# (Stub implementation of the CustomGeminiLangChainLLM if needed, 
+# or we can rely on standard ChatOpenAI for Ollama mode)
+
+# -------------------------------------------------------------------
+#  Main Interface
+# -------------------------------------------------------------------
+
+class LLMInterface:
+    """
+    Central LLM interface supporting both Enterprise (Azure/Gemini) and Local (Ollama).
+    """
+
+    def __init__(self) -> None:
+        self.client_llm: Any = None
+        self.embedding_client: Any = None
+        self._initialize_client()
+        logger.info(f"LLMInterface initialized in mode: {settings.llm_provider}")
+
+    def _initialize_client(self) -> None:
+        """Initializes clients based on LLM_PROVIDER settings."""
+        if settings.llm_provider.lower() == "ollama":
+            # --- Ollama Mode ---
+            # We use standard ChatOpenAI pointing to localhost
+            self.client_llm = ChatOpenAI(
+                base_url=settings.ollama_api_base,
+                api_key="ollama",
+                model=settings.ollama_chat_model,
+                temperature=0.2,
+            )
+            # Embeddings: Local OpenAI client to generate embeddings
+            self.embedding_client = OpenAI(
+                base_url=settings.ollama_api_base,
+                api_key="ollama",
+            )
+        else:
+            # --- Enterprise Mode ---
+            self._init_enterprise_clients()
+
+    def _init_enterprise_clients(self) -> None:
+        """Initializes Azure/Enterprise clients with Auth."""
+        token = get_cached_or_new_token()
+        
+        # Chat Client (Azure)
+        if settings.llm_api_base:
+            self.client_llm = AzureChatOpenAI(
+                azure_endpoint=settings.llm_api_base,
+                openai_api_key=token,
+                deployment_name=settings.llm_deployment_name,
+                openai_api_version=settings.llm_api_version,
+                temperature=0.2,
+            )
+        else:
+            logger.warning("Enterprise mode selected but LLM_API_BASE not set.")
+
+        # Embedding Client setup handled in embed_texts directly via requests 
+        # for consistent Enterprise usage pattern provided.
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+    ) -> str:
+        """
+        Generic chat completion helper.
+        """
+        # Convert dict messages to LangChain messages
+        lc_messages = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if role == "system":
+                lc_messages.append(SystemMessage(content=content))
+            else:
+                lc_messages.append(HumanMessage(content=content))
+
+        # Invoke
+        try:
+            if not self.client_llm:
+                self._initialize_client()
+            
+            result = self.client_llm.invoke(lc_messages)
+            
+            if hasattr(result, "content"):
+                return str(result.content)
+            return str(result)
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            # Simple retry logic could go here
+            return f"Error generating response: {e}"
+
+    # ----- JSON-oriented methods ----------
+
+    def _parse_json_safely(self, raw_text: str) -> Dict[str, Any]:
+        text = raw_text.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].lstrip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"answer": raw_text, "explanation": None}
+
+    def chat_completion_json(
+        self,
+        system_prompt: str,
+        payload: Dict[str, Any],
+        answer_model: type[BaseModel] = LeaderInsightAnswer,
+    ) -> BaseModel:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(payload)},
+        ]
+        raw = self.chat_completion(messages)
+        data = self._parse_json_safely(raw)
+        return answer_model.model_validate(data)
+
+    # ------------------------ embeddings ----------------------------
+
+    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """
+        Gets embeddings. Dispatches to Local or Enterprise logic.
+        """
+        if not texts:
+            return []
+
+        if settings.llm_provider.lower() == "ollama":
+            # Use local OpenAI client (Ollama)
+            try:
+                resp = self.embedding_client.embeddings.create(
+                    model=settings.ollama_embed_model,
+                    input=texts
+                )
+                return [d.embedding for d in resp.data]
+            except Exception as e:
+                logger.error(f"Local embedding failed: {e}")
+                return []
+        else:
+            # Enterprise Mode (Requests)
+            return self._embed_texts_enterprise(texts)
+
+    def _embed_texts_enterprise(self, texts: List[str]) -> List[List[float]]:
+        token = get_cached_or_new_token()
+        url = (
+            f"{settings.embedding_api_base.rstrip('/')}/"
+            f"{settings.embedding_deployment_name}/embeddings"
+            f"?api-version={settings.embedding_api_version}"
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": settings.embedding_deployment_name,
+            "input": texts,
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, verify=False, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            return [item["embedding"] for item in data["data"]]
+        except Exception as e:
+            logger.error(f"Enterprise embedding failed: {e}")
+            return []
+
+# Backwards compatibility function for existing code
+_interface = None
+
+def chat_completion(system_prompt: str, user_prompt: str, tools=None) -> str:
+    global _interface
+    if not _interface:
+        _interface = LLMInterface()
+    
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": "user", "content": user_prompt}
     ]
-    resp = _client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=messages,
-        tools=tools,
-        temperature=0.2,
-    )
-    return resp.choices[0].message.content or ""
+    return _interface.chat_completion(messages)
+
