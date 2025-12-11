@@ -30,6 +30,9 @@ By following this guide, you will have:
 
 ---
 
+
+---
+
 ## Prerequisites
 
 ### Required Software
@@ -517,6 +520,222 @@ streamlit run app.py
 
 ---
 
+## Sample Questions for Testing
+
+Use these curated questions to test and demonstrate the system's capabilities across different interaction modes.
+
+### 📊 Leader Insights Questions
+
+These questions help leadership make strategic decisions about AI initiatives.
+
+#### Question 1: Portfolio Prioritization
+```
+Which AI initiatives should we prioritize for Q1 2025 based on ROI and strategic alignment?
+```
+**Expected Answer Quality**: Strategic recommendations with specific project names, ROI calculations, risk assessments, and timeline considerations.
+
+#### Question 2: Risk Assessment
+```
+What are the highest-risk AI projects currently in production, and what mitigation strategies should we implement?
+```
+**Expected Answer Quality**: Identified high-risk projects with specific risk factors (governance, compliance, technical), concrete mitigation steps, and stakeholder responsibilities.
+
+#### Question 3: Cost Optimization
+```
+How can we optimize our AI portfolio to reduce costs while maintaining business value?
+```
+**Expected Answer Quality**: Specific cost-saving opportunities, ROI analysis of current projects, recommendations for consolidation or decommissioning, budget reallocation suggestions.
+
+#### Question 4: Team Capacity Planning
+```
+Which teams are over-allocated on AI initiatives, and how should we rebalance resources across the portfolio?
+```
+**Expected Answer Quality**: Team-by-team breakdown, utilization metrics, specific rebalancing recommendations, and impact on project timelines.
+
+#### Question 5: Compliance & Governance
+```
+Are there any AI initiatives that require immediate governance review or compliance updates?
+```
+**Expected Answer Quality**: List of non-compliant or at-risk projects, specific regulatory requirements, remediation steps, and urgency assessment.
+
+---
+
+### 💬 Chat with Catalogue Questions
+
+These questions help users explore and analyze the AI use case catalogue.
+
+#### Question 1: High-Impact Projects
+```
+Show me all production AI projects with estimated ROI above 200% and budget under £500,000.
+```
+**Filters to Apply**:
+```json
+{
+  "environment": "Production",
+  "budget_max": 500000
+}
+```
+**Expected Answer Quality**: Filtered list with project details, actual ROI calculations, team ownership, and success metrics.
+
+#### Question 2: Technology Stack Analysis
+```
+What are the most common AI technologies and platforms being used across our Generative AI initiatives?
+```
+**Filters to Apply**:
+```json
+{
+  "ai_type": "Generative AI"
+}
+```
+**Expected Answer Quality**: Technology breakdown, usage patterns, platform recommendations, and standardization opportunities.
+
+#### Question 3: Early-Stage Opportunities
+```
+Which AI projects are still in POC or pilot phase that show promise for production deployment?
+```
+**Filters to Apply**:
+```json
+{
+  "status": "POC",
+  "environment": "Lower"
+}
+```
+**Expected Answer Quality**: Projects ready for scale-up, business case strength, technical readiness assessment, and recommended next steps.
+
+#### Question 4: Budget Utilization
+```
+How is our AI budget distributed across different teams and initiative types?
+```
+**Expected Answer Quality**: Budget breakdown by team/type, spend efficiency analysis, over/under-budget projects, and reallocation recommendations.
+
+#### Question 5: Success Stories
+```
+What are our most successful AI deployments in the last 12 months, and what made them successful?
+```
+**Filters to Apply**:
+```json
+{
+  "environment": "Production"
+}
+```
+**Expected Answer Quality**: Top performers with success factors, lessons learned, best practices, and replication opportunities.
+
+---
+
+### 🎯 Platform Recommendations Questions
+
+These questions help architects make technical platform decisions.
+
+#### Question 1: Kubernetes vs Serverless
+```
+For a customer service chatbot handling 10,000 requests/day with variable load, should we use Kubernetes or Serverless?
+```
+**Use Case Details**:
+- **AI Type**: Generative AI
+- **Expected Volume**: 10,000 requests/day
+- **Load Pattern**: Variable (peak hours)
+- **Budget**: £250,000
+
+**Expected Answer Quality**: Platform comparison with cost analysis, scalability assessment, operational complexity, specific recommendations with rationale.
+
+#### Question 2: Data Processing Pipeline
+```
+What platform architecture should we use for a real-time fraud detection model processing 50,000 transactions/hour?
+```
+**Use Case Details**:
+- **AI Type**: Machine Learning
+- **Volume**: 50,000 transactions/hour
+- **Latency Requirement**: <100ms
+- **Data Sources**: Multiple databases
+
+**Expected Answer Quality**: Architecture diagram recommendations, technology stack, data flow patterns, latency optimization strategies, cost estimates.
+
+#### Question 3: Legacy Integration
+```
+How should we integrate a new AI recommendation engine with our existing mainframe banking systems?
+```
+**Use Case Details**:
+- **AI Type**: ML/Recommendations
+- **Legacy System**: Mainframe
+- **Integration Points**: Customer data, transaction history
+- **Compliance**: PCI-DSS, GDPR
+
+**Expected Answer Quality**: Integration patterns, middleware recommendations, security considerations, phased migration plan, risk mitigation.
+
+#### Question 4: Multi-Model Deployment
+```
+We need to deploy 15 different ML models that share common infrastructure. What's the best platform approach?
+```
+**Use Case Details**:
+- **Number of Models**: 15
+- **Update Frequency**: Weekly
+- **Teams**: 3 different teams
+- **SLA**: 99.9% uptime
+
+**Expected Answer Quality**: Model serving platform options (KServe, SageMaker, etc.), CI/CD strategy, governance framework, cost optimization for shared infrastructure.
+
+#### Question 5: POC to Production
+```
+Our chatbot POC was successful with 100 users. How do we scale to 100,000 production users?
+```
+**Use Case Details**:
+- **Current**: POC on laptop (100 users)
+- **Target**: Production (100,000 users)
+- **Budget**: £400,000
+- **Timeline**: 3 months
+
+**Expected Answer Quality**: Scaling strategy, infrastructure requirements, cost breakdown, performance testing plan, phased rollout approach, risk assessment.
+
+---
+
+## Testing These Questions
+
+### Via Streamlit UI
+
+1. **Navigate** to the appropriate section (Leader Insights / Dashboard / Recommendations)
+2. **Enter** the question exactly as shown
+3. **Apply** any specified filters
+4. **Review** the answer quality against expected criteria
+
+### Via API with curl
+
+```bash
+# Leader Q&A Example
+curl -X POST "http://localhost:8000/leader-qa" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Which AI initiatives should we prioritize for Q1 2025 based on ROI and strategic alignment?"
+  }'
+
+# Chat with Catalogue Example
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Show me all production AI projects with estimated ROI above 200% and budget under £500,000",
+    "filters": {
+      "environment": "Production",
+      "budget_max": 500000
+    }
+  }'
+```
+
+### Via Postman
+
+1. **Import** the collection: `AI_Insights_API.postman_collection.json`
+2. **Create** new requests using the sample questions above
+3. **Compare** API responses with UI responses for consistency
+
+### Quality Check Criteria
+
+For each answer, verify:
+- ✅ **Accuracy**: Information is factually correct
+- ✅ **Completeness**: All aspects of the question are addressed
+- ✅ **Actionability**: Provides concrete next steps or recommendations
+- ✅ **Context**: Uses actual data from your catalogue
+- ✅ **Structure**: Well-formatted with clear sections
+
+---
+
 ## API Testing with Postman
 
 ### Import Collection
@@ -699,12 +918,28 @@ After successful setup:
 
 ---
 
+## Additional Documentation
+
+### 📐 Architecture Details
+
+For detailed information about the system architecture and LLM selection mechanism, see:
+
+**[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete technical architecture documentation including:
+- How LLM selection works (Ollama vs Enterprise)
+- Call flow diagrams
+- Scripts that make LLM calls
+- Configuration reference
+- Mode switching guides
+
+---
+
 ## Support Contact
 
 For technical issues:
 - Review this documentation thoroughly
 - Check [Troubleshooting](#troubleshooting) section
 - Run `python verify_all.py` for diagnostics
+- Review [ARCHITECTURE.md](ARCHITECTURE.md) for technical details
 - Contact your technical lead with error messages
 
 ---
