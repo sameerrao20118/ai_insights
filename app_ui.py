@@ -63,8 +63,9 @@ def _render_prompt_config() -> None:
 
     finops = _get_decision_factors()
     base_finops = load_finops_config()
-    with st.expander("Decision factors (from finops_config.json)"):
-        st.caption("Weights and heuristics follow FinOps best practice. Adjust weights to experiment; resets apply per session.")
+    with st.expander("⚙️ Decision Factors for Platform Recommendations"):
+        st.info("ℹ️ **Scope**: These weights are used ONLY for **Ad-hoc Platform Recommendation** (bottom of page). They do NOT affect Leader Questions or Catalogue Chat, which analyze actual performance data (ROI, benefits, costs).")
+        st.caption("Adjust weights to experiment with platform recommendation logic. Changes apply per session only.")
         st.write("Base config:")
         st.json(base_finops)
 
@@ -92,21 +93,55 @@ def _render_prompt_config() -> None:
 
 def _render_leader_dashboards(df: pd.DataFrame) -> None:
     st.markdown("### Leader dashboards")
+    
+    # Styled metrics container
+    st.markdown('<div class="metrics-container">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     col1.metric("Total use-cases", len(df))
     col2.metric("Teams covered", df["Team"].nunique() if "Team" in df else 0)
     total_budget = df["EstimatedBudgetGBP"].fillna(0).sum() if "EstimatedBudgetGBP" in df else 0
     col3.metric("Total est. budget (GBP)", f"{int(total_budget):,}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if "Environment" in df:
-        env_counts = df["Environment"].fillna("Unknown").value_counts().reset_index(name="count").rename(columns={"index": "Environment"})
-        env_fig = px.bar(env_counts, x="Environment", y="count", title="Environments (Prod/Lower)")
-        st.plotly_chart(env_fig, use_container_width=True)
+    # Brand colors for charts
+    brand_colors = ["#5A287F", "#7B4BA6", "#9D72CC", "#C4B5FD", "#E9D5FF", "#F3E8FF"]
+    
+    col_chart1, col_chart2 = st.columns(2)
 
-    if "AIType" in df:
-        ai_counts = df["AIType"].fillna("Unknown").value_counts().reset_index(name="count").rename(columns={"index": "AIType"})
-        ai_fig = px.pie(ai_counts, names="AIType", values="count", title="AI platform mix")
-        st.plotly_chart(ai_fig, use_container_width=True)
+    with col_chart1:
+        if "Environment" in df:
+            env_counts = df["Environment"].fillna("Unknown").value_counts().reset_index(name="count").rename(columns={"index": "Environment"})
+            env_fig = px.bar(
+                env_counts, 
+                x="Environment", 
+                y="count", 
+                title="Environments (Prod/Lower)",
+                color_discrete_sequence=[brand_colors[0]]
+            )
+            env_fig.update_layout(
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                font_family="Inter",
+                title_font_color="#2D3748",
+                yaxis_gridcolor="#E2E8F0"
+            )
+            st.plotly_chart(env_fig, use_container_width=True)
+
+    with col_chart2:
+        if "AIType" in df:
+            ai_counts = df["AIType"].fillna("Unknown").value_counts().reset_index(name="count").rename(columns={"index": "AIType"})
+            ai_fig = px.pie(
+                ai_counts, 
+                names="AIType", 
+                values="count", 
+                title="AI platform mix",
+                color_discrete_sequence=brand_colors
+            )
+            ai_fig.update_layout(
+                font_family="Inter",
+                title_font_color="#2D3748"
+            )
+            st.plotly_chart(ai_fig, use_container_width=True)
 
     if "BenefitValuePerAnnum" in df:
         benefit_fig = px.histogram(
@@ -114,6 +149,15 @@ def _render_leader_dashboards(df: pd.DataFrame) -> None:
             x="BenefitValuePerAnnum",
             nbins=10,
             title="Benefit value per annum distribution",
+            color_discrete_sequence=[brand_colors[1]]
+        )
+        benefit_fig.update_layout(
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            font_family="Inter",
+            title_font_color="#2D3748",
+            yaxis_gridcolor="#E2E8F0",
+            bargap=0.1
         )
         st.plotly_chart(benefit_fig, use_container_width=True)
 
@@ -129,137 +173,248 @@ def _format_last_ingest() -> str:
 def _render_global_header() -> None:
     """Renders professional NatWest-branded header with enterprise styling."""
     
-    # Professional enterprise CSS styling
+    # Professional enterprise CSS styling with production-grade enhancements
     st.markdown("""
     <style>
-    /* Main header styling */
-    .main-header {
-        background: linear-gradient(135deg, #5A287F 0%, #42166C 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 8px;
-        margin-bottom: 2rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    /* Import professional font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    /* Apply font globally */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        color: #2C3E50;
     }
     
-    .header-content {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
+    /* Global Background */
+    .stApp {
+        background-color: #FAFBFC;
     }
-    
-    .header-logo {
-        height: 50px;
-        width: auto;
-    }
-    
-    .header-title {
-        color: white;
-        font-size: 1.8rem;
-        font-weight: 600;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }
-    
-    .header-subtitle {
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 0.95rem;
-        margin: 0.25rem 0 0 0;
-    }
-    
-    /* Enhanced sidebar styling */
+
+    /* Enhanced sidebar width */
     [data-testid="stSidebar"] {
-        background-color: #F8F9FA;
+        width: calc(21rem + 40px) !important;
+        min-width: calc(21rem + 40px) !important;
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E0E0E0;
     }
     
-    [data-testid="stSidebar"] .sidebar-content {
-        padding: 1rem;
+    [data-testid="stSidebar"] > div:first-child {
+        width: calc(21rem + 40px) !important;
+        min-width: calc(21rem + 40px) !important;
     }
     
-    /* Enhanced metrics */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem;
+    /* Sidebar styling */
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+    
+    /* Sidebar Navigation Links */
+    [data-testid="stSidebar"] .stRadio > label {
+        font-weight: 700;
         color: #5A287F;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    
+    [data-testid="stSidebar"] .stRadio [role="radiogroup"] label {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 4px;
+        transition: all 0.2s ease;
+        border: 1px solid transparent;
+        color: #4A5568;
+        font-weight: 500;
+    }
+    
+    [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover {
+        background-color: #F8F9FA;
+        color: #5A287F;
+    }
+
+    /* Active Selection Styling */
+    [data-testid="stSidebar"] .stRadio [role="radiogroup"] [data-checked="true"] {
+        background-color: #F3EBFA !important;
+        color: #5A287F !important;
+        border-color: #E6DAF2 !important;
         font-weight: 600;
     }
     
-    /* Enhanced tabs */
+    /* Main H1/H2 Styling */
+    h1, h2, h3 {
+        color: #2D3748;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    
+    h1 { font-size: 2.2rem; }
+    h2 { font-size: 1.6rem; margin-top: 1.5rem; margin-bottom: 1rem; }
+    h3 { font-size: 1.25rem; font-weight: 600; color: #4A5568; margin-top: 1rem; }
+
+    /* Cards / Containers */
+    div.block-container {
+        padding-top: 3rem;
+    }
+
+    /* Metric Cards */
+    [data-testid="stMetric"] {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        text-align: center;
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-size: 0.875rem;
+        color: #718096;
+        font-weight: 500;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #5A287F;
+    }
+    
+    /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 2rem;
+        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 0px;
     }
     
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background-color: #F8F9FA;
-        border-radius: 4px;
-        padding: 0 24px;
+        height: 3rem;
+        white-space: nowrap;
+        background-color: transparent;
+        border: none;
+        color: #718096;
         font-weight: 500;
+        padding: 0 0.5rem;
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: #5A287F !important;
-        color: white !important;
+        color: #5A287F !important;
+        border-bottom: 2px solid #5A287F;
+        font-weight: 600;
     }
     
-    /* Enhanced expanders */
-    .streamlit-expanderHeader {
-        background-color: #F8F9FA;
-        border-radius: 4px;
-        font-weight: 500;
+    /* Inputs */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div, 
+    .stTextArea > div > div > textarea,
+    .stNumberInput > div > div > input {
+        border-radius: 6px;
+        border: 1px solid #CBD5E0;
+        background-color: white;
+        color: #2D3748;
     }
     
-    /* Professional button styling */
-    .stButton > button {
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #5A287F;
+        box-shadow: 0 0 0 1px #5A287F;
+    }
+    
+    /* Buttons */
+    div.stButton > button {
         background-color: #5A287F;
         color: white;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
         border: none;
-        border-radius: 4px;
-        padding: 0.5rem 1.5rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(90, 40, 127, 0.2);
+        transition: all 0.2s;
     }
     
-    .stButton > button:hover {
+    div.stButton > button:hover {
         background-color: #42166C;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 6px rgba(90, 40, 127, 0.3);
+        transform: translateY(-1px);
     }
     
-    /* Card-like containers */
-    .element-container {
-        background-color: white;
+    div.stButton > button:active {
+        transform: translateY(0);
     }
     
-    /* Professional spacing */
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
+    /* Secondary buttons (outlined) - Hacky, requires targeting specific button types if applied via type="secondary" */
+    button[kind="secondary"] {
+        background-color: white !important;
+        color: #5A287F !important;
+        border: 1px solid #5A287F !important;
+        box-shadow: none !important;
+    }
+    
+    button[kind="secondary"]:hover {
+        background-color: #F3EBFA !important;
+    }
+
+    /* DataFrames */
+    .stDataFrame {
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    /* Charts */
+    .js-plotly-plot .plotly .modebar {
+        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Render branded header
-    try:
-        header_col1, header_col2 = st.columns([1, 8])
-        with header_col1:
-            st.image("assets/natwest_logo.png", width=140)
-        with header_col2:
+    
+    # Render branded header with NatWest logo and LEFT alignment
+    header_col1, header_col2 = st.columns([0.12, 0.88])
+    
+    with header_col1:
+        try:
+            st.image("assets/natwest_logo.png", width=60)
+        except Exception:
+            # Fallback to gradient icon if logo not found
             st.markdown("""
-            <div style="padding-top: 0.5rem;">
-                <h1 style="color: #5A287F; margin: 0; font-size: 2rem; font-weight: 600;">AI Usage Insights</h1>
-                <p style="color: #6C757D; margin: 0.5rem 0 0 0; font-size: 1rem;">Enterprise AI Catalogue & Platform Recommendations</p>
-            </div>
+            <div style="
+                width: 50px; 
+                height: 50px; 
+                background: linear-gradient(135deg, #5A287F 0%, #7B4BA6 100%);
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                color: white;
+                font-size: 24px;
+                box-shadow: 0 4px 6px rgba(90, 40, 127, 0.2);
+            ">NW</div>
             """, unsafe_allow_html=True)
-    except Exception:
-        # Fallback if logo not found
+    
+    with header_col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #5A287F 0%, #42166C 100%); 
-                    padding: 1.5rem 2rem; border-radius: 8px; margin-bottom: 2rem; 
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <h1 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">AI Usage Insights</h1>
-            <p style="color: rgba(255, 255, 255, 0.9); margin: 0.25rem 0 0 0; font-size: 0.95rem;">
-                Enterprise AI Catalogue & Platform Recommendations
-            </p>
+        <div style="padding-top: 0.5rem;">
+            <h1 style="
+                color: #2C3E50; 
+                margin: 0; 
+                font-size: 2.2rem; 
+                font-weight: 700;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                letter-spacing: -0.5px;
+            ">AI Usage Insights</h1>
+            <p style="
+                color: #6C757D; 
+                margin: 0.25rem 0 0 0; 
+                font-size: 0.95rem;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                font-weight: 400;
+            ">Enterprise AI Catalogue & Recommendations</p>
         </div>
         """, unsafe_allow_html=True)
+
     
     st.markdown("---")
 
@@ -267,6 +422,7 @@ def _render_global_header() -> None:
     col1.metric("Last ingest", _format_last_ingest())
     col2.metric("Environment", "Streamlit")
     col3.metric("Vector DB", "Chroma + OpenAI")
+
 
 
 def render_leader_insights():
@@ -291,7 +447,7 @@ def render_leader_insights():
         "Leader question",
         placeholder="Which AI investment is delivering the strongest results? Where are we spending the most?",
     )
-    if st.button("Answer leader question", type="secondary"):
+    if st.button("Render Insights", type="primary"):
         if not leader_q.strip():
             st.info("Enter a question to analyze the catalogue.")
         else:
@@ -306,10 +462,15 @@ def render_leader_insights():
                         system_prompt_override=leader_prompt
                     )
                     parsed = services.parse_llm_json(raw_answer)
-                    st.success(parsed.get("answer", raw_answer))
+                    
+                    # Show only the answer prominently
+                    answer_text = parsed.get("answer", raw_answer)
+                    st.markdown(answer_text)
+                    
+                    # Hide explanation in expander (collapsed by default)
                     expl = parsed.get("explanation")
                     if expl:
-                        with st.expander("Show explanation"):
+                        with st.expander("Show explanation", expanded=False):
                             st.write(expl)
                 except Exception as exc:  # noqa: BLE001
                     st.error("Could not generate an answer. Check your OpenAI/Ollama credentials and try again.")
@@ -324,7 +485,7 @@ def render_leader_insights():
         "Ask anything about the indexed AI use-cases",
         placeholder="e.g., Which AI types have the highest benefits? Where are we overspending relative to benefit?",
     )
-    if st.button("Send to LLM", type="primary"):
+    if st.button("Submit", type="primary"):
         if not chat_q.strip():
             st.info("Enter a chat question to continue.")
         else:
@@ -373,7 +534,9 @@ def render_leader_insights():
     )
     st.caption(selected.ProjectDescription)
 
-    st.markdown("### Ad-hoc platform recommendation (manual inputs)")
+
+    st.markdown("###Ad-hoc platform recommendation (manual inputs)")
+    st.info("ℹ️ **Uses Decision Factors**: This feature uses the decision weights (configured in Config tab) to recommend which AI platform to use. It does NOT analyze existing portfolio performance.")
     with st.form("ad_hoc_reco_form"):
         col_a1, col_a2 = st.columns(2)
         adhoc_name = col_a1.text_input("Use-Case Name", value=selected.UseCaseName)
@@ -401,7 +564,7 @@ def render_leader_insights():
 
         st.caption("AI platform will be recommended automatically; no manual selection is needed.")
 
-        adhoc_submit = st.form_submit_button("Get recommendation from manual inputs")
+        adhoc_submit = st.form_submit_button("Get recommendation from manual inputs", type="primary")
 
     if adhoc_submit:
         try:
@@ -460,15 +623,11 @@ def main():
         initial_sidebar_state="expanded",
     )
 
-    st.sidebar.markdown("""
-    <div style="text-align: center; padding: 1rem 0;">
-        <h2 style="color: #5A287F; margin: 0; font-size: 1.5rem; font-weight: 600;">AI Insights Hub</h2>
-        <p style="color: #6C757D; font-size: 0.85rem; margin: 0.5rem 0;">Enterprise Platform</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+
+    # Clean sidebar - no header duplication
     st.sidebar.markdown("---")
     st.sidebar.info("💡 Navigate using the menu below to explore AI initiatives, import data, and access leadership insights.")
+    
     
     page = st.sidebar.radio(
         "📋 Navigation",

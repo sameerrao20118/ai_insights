@@ -168,71 +168,25 @@ If you see `✅ Dependencies installed`, continue. If you see any errors, review
 Contact your IT administrator to get:
 - Service account username
 - Service account password  
-- Authentication URL
-- Azure OpenAI gateway URL
-- Embedding service URL
-- Gemini/Vertex gateway URL
+- Authentication URL (JWT token endpoint)
+- Azure OpenAI LLM gateway base URL
+- Azure OpenAI embedding gateway base URL
+- LLM deployment name
+- Embedding deployment name
 
-#### 4a.2: Set Up `auth.py`
+#### 4a.2: Understand `auth.py` (Already Implemented)
 
-**📝 ACTION REQUIRED**: You need to implement the authentication logic specific to your organization.
+The `auth.py` file is **already implemented** with:
+- ✅ JWT token fetching from your auth endpoint
+- ✅ Token caching with file persistence
+- ✅ Automatic token refresh on expiry
+- ✅ Error handling and retry logic
 
-Open `auth.py` in your text editor and replace the contents with your enterprise auth logic:
-
-```python
-# auth.py
-import requests
-import time
-from datetime import datetime
-
-_TOKEN_CACHE = {}
-
-def get_cached_or_new_token() -> str:
-    """
-    Fetch JWT token from enterprise auth service.
-    """
-    # Check if we have a valid cached token
-    if _TOKEN_CACHE.get("token") and _TOKEN_CACHE.get("expiry", 0) > time.time():
-        return _TOKEN_CACHE["token"]
-    
-    # Import settings to get credentials
-    from config.settings import settings
-    
-    # CUSTOMIZE THIS: Your organization's token endpoint
-    # Example shown - replace with your actual logic
-    response = requests.post(
-        settings.auth_url,
-        json={
-            "username": settings.service_account,
-            "password": settings.service_account_pass
-        },
-        verify=False,  # adjust based on your corporate SSL policy
-        timeout=30
-    )
-    
-    response.raise_for_status()
-    
-    # Get token from response (adjust key names to match your API)
-    data = response.json()
-    token = data.get("access_token")  # or data.get("token")
-    
-    # Cache token (assuming 1 hour expiry - adjust as needed)
-    _TOKEN_CACHE["token"] = token
-    _TOKEN_CACHE["expiry"] = time.time() + 3600
-    
-    return token
-
-def delete_token_cache() -> None:
-    """Clears cached token to force refresh."""
-    global _TOKEN_CACHE
-    _TOKEN_CACHE.clear()
-```
-
-✅ **Checkpoint**: Save the file.
+**No changes needed to `auth.py`** - it works with standard JWT authentication endpoints.
 
 #### 4a.3: Configure `.env` File
 
-Create a file named `.env` in the project root directory with the following content:
+Create a file named `.env` in the project root directory with your enterprise settings:
 
 ```bash
 # =====================================
@@ -243,31 +197,42 @@ Create a file named `.env` in the project root directory with the following cont
 LLM_PROVIDER=enterprise
 
 # =====================================
-# Authentication Settings
+# Authentication Settings (JWT)
 # =====================================
-SERVICE_ACCOUNT=YOUR_SERVICE_ACCOUNT_HERE
-SERVICE_ACCOUNT_PASS=YOUR_PASSWORD_HERE
-AUTH_URL=https://your-auth-gateway.company.com/token
+SERVICE_ACCOUNT=YOUR_SERVICE_ACCOUNT
+SERVICE_ACCOUNT_PASS=YOUR_PASSWORD
+AUTH_URL=https://your-gateway.company.com/token
 
 # =====================================
-# Azure OpenAI (Chat)
+# Azure OpenAI - Chat LLM
 # =====================================
-LLM_API_BASE=https://your-gateway.company.com/genai/openai/gpt41
-LLM_DEPLOYMENT_NAME=gpt41_deployment_name_here
+# IMPORTANT: Base URL should be WITHOUT /openai/deployments/
+# The AzureChatOpenAI client will add this automatically
+# 
+# Example: If your full endpoint is:
+#   https://gateway.com/genai/openai/gpt/openai/deployments/gpt_model_name/chat/completions
+# Then set:
+#   LLM_API_BASE=https://gateway.com/genai/openai/gpt
+#   LLM_DEPLOYMENT_NAME=gpt_model_name
+# 
+LLM_API_BASE=https://your-gateway.company.com/genai/openai/gpt
+LLM_DEPLOYMENT_NAME=your_gpt_deployment_name
 LLM_API_VERSION=2024-06-01
 
 # =====================================
-# Embeddings Service
+# Azure OpenAI - Embeddings
 # =====================================
-EMBEDDING_API_BASE=https://your-gateway.company.com/genai/openai/ada/openai2/deployments
-EMBEDDING_DEPLOYMENT_NAME=ada002
+# Same pattern as LLM - base URL without /openai/deployments/
+# 
+# Example: If your full endpoint is:
+#   https://gateway.com/genai/openai/ada/openai/deployments/ada002_2/embeddings
+# Then set:
+#   EMBEDDING_API_BASE=https://gateway.com/genai/openai/ada
+#   EMBEDDING_DEPLOYMENT_NAME=ada002_2
+# 
+EMBEDDING_API_BASE=https://your-gateway.company.com/genai/openai/ada
+EMBEDDING_DEPLOYMENT_NAME=your_embedding_deployment_name
 EMBEDDING_API_VERSION=2024-06-01
-
-# =====================================
-# Gemini/Vertex AI (Optional)
-# =====================================
-BASE_URL=https://your-gateway.company.com/
-CHAT_SUFFIX=genai/vertexai/gemini-2.5-pro/generateContent
 
 # =====================================
 # Application Settings
@@ -277,13 +242,53 @@ COLLECTION_NAME=ai_usecases
 ENVIRONMENT=production
 ```
 
-**📝 REPLACE THE FOLLOWING**:
-- `YOUR_SERVICE_ACCOUNT_HERE` → Your actual service account
-- `YOUR_PASSWORD_HERE` → Your actual password
-- All URLs → Your organization's actual gateway URLs
-- Deployment names → Your actual deployment names
+**📝 REPLACE WITH YOUR ACTUAL VALUES**:
+- `YOUR_SERVICE_ACCOUNT` → Your enterprise service account (e.g., Service-12345-aaas)
+- `YOUR_PASSWORD` → Your service account password
+- `AUTH_URL` → Your organization's JWT token endpoint
+- `LLM_API_BASE` → Your Azure OpenAI chat gateway base URL (WITHOUT /openai/deployments/)
+- `LLM_DEPLOYMENT_NAME` → Your chat model deployment name
+- `EMBEDDING_API_BASE` → Your embedding gateway base URL (WITHOUT /openai/deployments/)
+- `EMBEDDING_DEPLOYMENT_NAME` → Your embedding deployment name
 
-✅ **Checkpoint**: Save the `.env` file. Re-check that `LLM_PROVIDER=enterprise`.
+> **🔍 URL Pattern Tip**: Test your URLs with curl to verify the correct structure:
+> ```bash
+> # This should return 200 OK with embeddings
+> curl --location --request POST \
+>   "https://your-gateway.com/genai/openai/ada/openai/deployments/ada002_2/embeddings?api-version=2024-06-01" \
+>   --header "Authorization: Bearer YOUR_TOKEN" \
+>   --header "Content-Type: application/json" \
+>   --data '{"input": "test"}'
+> ```
+>
+> If this works, then:
+> - `EMBEDDING_API_BASE=https://your-gateway.com/genai/openai/ada`
+> - `EMBEDDING_DEPLOYMENT_NAME=ada002_2`
+
+✅ **Checkpoint**: Save the `.env` file. Verify `LLM_PROVIDER=enterprise`.
+
+### Step 5a: Test Enterprise Setup
+
+Use the provided test scripts to validate each component:
+
+#### Test Authentication
+```bash
+python test_auth.py
+```
+**Expected**: ✅ Token obtained (584 characters)
+
+#### Test LLM Interface
+```bash
+python test_llm.py
+```
+**Expected**: ✅ LLM initialized, ⚠️ Embedding may fail (this is OK for now)
+
+#### Test Vector DB
+```bash
+python test_vectordb.py
+```
+**Expected**: ✅ VectorDB initialized with X documents
+
 
 ### Step 5a: Validate Enterprise Setup
 

@@ -31,7 +31,3 @@ commitizen==3.27.0
 fastapi
 uvicorn
 pydantic-settings
-requests
-langchain
-langchain-core
-langchain-openai

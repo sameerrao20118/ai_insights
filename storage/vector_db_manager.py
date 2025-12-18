@@ -141,3 +141,60 @@ class VectorDBManager:
         def _op():
             self.collection.delete(where={})
         self._execute_with_retry(_op)
+
+    def get_total_count(self) -> int:
+        """Get total number of documents in the collection."""
+        try:
+            result = self.collection.count()
+            return result
+        except Exception:
+            # Fallback: get all and count
+            result = self.collection.get(include=[])
+            return len(result.get("ids", []))
+
+    def get_all_documents(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get all documents from the collection with optional limit."""
+        result = self.collection.get(
+            limit=limit,
+            include=["metadatas", "documents"]
+        )
+        
+        documents = []
+        if not result["ids"]:
+            return documents
+            
+        for i in range(len(result["ids"])):
+            documents.append({
+                "id": result["ids"][i],
+                "document": result["documents"][i] if result.get("documents") else None,
+                "metadata": result["metadatas"][i] if result.get("metadatas") else {}
+            })
+        return documents
+
+    def get_documents_by_metadata(self, field: str, value: Any, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get documents matching a specific metadata field value."""
+        where_clause = {field: {"$eq": value}}
+        
+        result = self.collection.get(
+            where=where_clause,
+            limit=limit,
+            include=["metadatas", "documents"]
+        )
+        
+        documents = []
+        if not result["ids"]:
+            return documents
+            
+        for i in range(len(result["ids"])):
+            documents.append({
+                "id": result["ids"][i],
+                "document": result["documents"][i] if result.get("documents") else None,
+                "metadata": result["metadatas"][i] if result.get("metadatas") else {}
+            })
+        return documents
+
+    def get_count_by_metadata(self, field: str, value: Any) -> int:
+        """Count documents matching a specific metadata field value."""
+        where_clause = {field: {"$eq": value}}
+        result = self.collection.get(where=where_clause, include=[])
+        return len(result.get("ids", []))

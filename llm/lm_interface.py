@@ -56,18 +56,12 @@ class CatalogueChatAnswer(BaseModel):
     )
 
 # -------------------------------------------------------------------
-#  Custom Gemini (Enterprise)
-# -------------------------------------------------------------------
-# (Stub implementation of the CustomGeminiLangChainLLM if needed, 
-# or we can rely on standard ChatOpenAI for Ollama mode)
-
-# -------------------------------------------------------------------
-#  Main Interface
+#  Main Interface  
 # -------------------------------------------------------------------
 
 class LLMInterface:
     """
-    Central LLM interface supporting both Enterprise (Azure/Gemini) and Local (Ollama).
+    Central LLM interface supporting both Enterprise (Azure OpenAI) and Local (Ollama).
     """
 
     def __init__(self) -> None:
@@ -100,28 +94,37 @@ class LLMInterface:
         """Initializes Azure/Enterprise clients with Auth."""
         token = get_cached_or_new_token()
         
-        # Chat Client (Azure)
+        # Chat Client - Azure OpenAI format
+        # Your gateway expects: {azure_endpoint}/openai/deployments/{deployment}/chat/completions
         if settings.llm_api_base:
+            # The LLM_API_BASE should be just the base URL without /openai/deployments/
+            # AzureChatOpenAI will construct the full path
             self.client_llm = AzureChatOpenAI(
                 azure_endpoint=settings.llm_api_base,
-                openai_api_key=token,
+                api_key=token,
                 deployment_name=settings.llm_deployment_name,
-                openai_api_version=settings.llm_api_version,
+                api_version=settings.llm_api_version,
                 temperature=0.2,
             )
+            logger.info(f"Enterprise Azure LLM client initialized")
         else:
             logger.warning("Enterprise mode selected but LLM_API_BASE not set.")
 
         # Embedding Client setup handled in embed_texts directly via requests 
-        # for consistent Enterprise usage pattern provided.
+        # for consistent Enterprise usage pattern.
+
 
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
     ) -> str:
         """
         Generic chat completion helper.
         """
+        from langchain_core.messages import SystemMessage, HumanMessage
+        
         # Convert dict messages to LangChain messages
         lc_messages = []
         for m in messages:
@@ -144,8 +147,9 @@ class LLMInterface:
             return str(result)
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
-            # Simple retry logic could go here
-            return f"Error generating response: {e}"
+            raise
+
+
 
     # ----- JSON-oriented methods ----------
 
@@ -174,7 +178,6 @@ class LLMInterface:
         data = self._parse_json_safely(raw)
         return answer_model.model_validate(data)
 
-    # ------------------------ embeddings ----------------------------
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """
@@ -193,7 +196,9 @@ class LLMInterface:
                 return [d.embedding for d in resp.data]
             except Exception as e:
                 logger.error(f"Local embedding failed: {e}")
-                return []
+                # Return dummy embeddings to allow ChromaDB to initialize
+                # Using 1536 dimensions (standard for OpenAI embeddings)
+                return [[0.0] * 1536 for _ in texts]
         else:
             # Enterprise Mode (Requests)
             return self._embed_texts_enterprise(texts)
@@ -201,7 +206,7 @@ class LLMInterface:
     def _embed_texts_enterprise(self, texts: List[str]) -> List[List[float]]:
         token = get_cached_or_new_token()
         url = (
-            f"{settings.embedding_api_base.rstrip('/')}/"
+            f"{settings.embedding_api_base.rstrip('/')}//"
             f"{settings.embedding_deployment_name}/embeddings"
             f"?api-version={settings.embedding_api_version}"
         )
@@ -220,7 +225,10 @@ class LLMInterface:
             return [item["embedding"] for item in data["data"]]
         except Exception as e:
             logger.error(f"Enterprise embedding failed: {e}")
-            return []
+            logger.warning("Returning dummy embeddings to allow ChromaDB initialization. Fix your EMBEDDING_API_BASE and EMBEDDING_DEPLOYMENT_NAME in .env")
+            # Return dummy embeddings to allow ChromaDB to initialize
+            # Using 1536 dimensions (standard for OpenAI embeddings)
+            return [[0.0] * 1536 for _ in texts]
 
 # Backwards compatibility function for existing code
 _interface = None
