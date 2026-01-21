@@ -3,6 +3,12 @@
 Enterprise Gateway URL Structure Investigator
 This will help determine the correct URL format for your gateway.
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path so imports work from scripts/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import requests
 from config.settings import settings
 from auth import get_cached_or_new_token

@@ -5,6 +5,11 @@ This will test each component and show exactly where the failure occurs.
 """
 import sys
 import traceback
+from pathlib import Path
+
+# Add parent directory to path so imports work from scripts/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config.settings import settings
 from auth import get_cached_or_new_token
 

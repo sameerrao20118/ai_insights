@@ -1,5 +1,9 @@
 import sys
 import os
+from pathlib import Path
+
+# Add parent directory to path so imports work from scripts/
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 print("--- 1. Testing Dependencies ---")
 try:

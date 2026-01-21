@@ -2,6 +2,12 @@
 """
 Quick check script to verify if LLM_PROVIDER is correctly set.
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path so imports work from scripts/
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config.settings import settings
 
 print("=" * 60)
