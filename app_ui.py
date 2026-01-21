@@ -8,7 +8,10 @@ import streamlit as st
 from admin_components.bulk_import_tab import render_bulk_import_tab
 from admin_components.dashboard_tab import render_dashboard_tab
 from admin_components.manual_add_tab import render_manual_add_tab
+from admin_components.config_tab import render_config_tab
 from admin.admin_utils import get_vdb
+from data_sources import get_data_source
+import services_mysql
 from finops.finops_config import load_finops_config
 import json
 from models import AIUseCase
@@ -418,11 +421,106 @@ def _render_global_header() -> None:
     
     st.markdown("---")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Last ingest", _format_last_ingest())
     col2.metric("Environment", "Streamlit")
     col3.metric("Vector DB", "Chroma + OpenAI")
+    
+    # Show data source
+    try:
+        data_source = get_data_source()
+        source_info = data_source.get_source_info()
+        col4.metric("Data Source", source_info.get('type', 'Unknown'))
+    except Exception:
+        col4.metric("Data Source", "Unknown")
 
+
+
+def render_nl_query_tab():
+    """Render the Natural Language Query tab for MySQL."""
+    st.subheader("💬 Natural Language to SQL Query")
+    
+    from config import settings
+    
+    if settings.data_source != "mysql":
+        st.warning("⚠️ Natural Language SQL queries are only available when using MySQL as the data source.")
+        st.info("Switch to MySQL data source in the Configuration tab to use this feature.")
+        return
+    
+    st.write(
+        "Ask questions in plain English, and they will be automatically translated to SQL and executed against your MySQL database."
+    )
+    
+    # Query input
+    nl_question = st.text_area(
+        "Enter your question",
+        placeholder="Example: Show me all projects with ROI greater than 200%",
+        height=100,
+    )
+    
+    # Execute button
+    if st.button("🔍 Execute Query", type="primary"):
+        if not nl_question.strip():
+            st.warning("Please enter a question")
+        else:
+            with st.spinner("Translating to SQL and executing..."):
+                try:
+                    # Execute NL query
+                    result = services_mysql.query_with_nl(nl_question)
+                    
+                    # Show generated SQL
+                    if settings.show_generated_sql:
+                        st.markdown("### 📝 Generated SQL")
+                        st.code(result.sql, language="sql")
+                        
+                        if result.explanation:
+                            with st.expander("💡 Explanation"):
+                                st.write(result.explanation)
+                    
+                    # Show results
+                    st.markdown("### 📊 Query Results")
+                    st.success(f"✅ Query executed successfully. Returned {result.row_count} row(s)")
+                    
+                    if result.results:
+                        # Convert to DataFrame for better display
+                        import pandas as pd
+                        df = pd.DataFrame(result.results)
+                        st.dataframe(df, use_container_width=True)
+                        
+                        # Download option
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download as CSV",
+                            data=csv,
+                            file_name="query_results.csv",
+                            mime="text/csv",
+                        )
+                    else:
+                        st.info("No results returned")
+                
+                except Exception as e:
+                    st.error(f"❌ Error executing query: {e}")
+                    st.caption("Check the SQL syntax or try rephrasing your question")
+    
+    # Sample questions
+    st.markdown("---")
+    st.markdown("### 💡 Sample Questions")
+    
+    sample_questions = [
+        "Show me all projects in production",
+        "What is the average budget by team?",
+        "List projects with ROI above 150%",
+        "Count projects by AI type",
+        "Show projects where budget exceeds 100000",
+    ]
+    
+    cols = st.columns(2)
+    for idx, question in enumerate(sample_questions):
+        col = cols[idx % 2]
+        with col:
+            if st.button(f"📌 {question}", key=f"sample_{idx}"):
+                st.session_state["nl_question"] = question
+                st.rerun()
 
 
 def render_leader_insights():
@@ -636,6 +734,8 @@ def main():
             "📤 Bulk Import",
             "➕ Manual Add",
             "🎯 Leader Insights",
+            "💬 Natural Language Query",
+            "⚙️ Configuration",
         ],
         label_visibility="visible"
     )
@@ -653,3 +753,7 @@ def main():
         render_manual_add_tab()
     elif page_clean == "Leader Insights":
         render_leader_insights()
+    elif page_clean == "Natural Language Query":
+        render_nl_query_tab()
+    elif page_clean == "Configuration":
+        render_config_tab()

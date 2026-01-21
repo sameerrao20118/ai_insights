@@ -50,6 +50,27 @@ class Settings(BaseSettings):
     collection_name: str = Field(default="ai_usecases", alias="COLLECTION_NAME")
     environment: str = Field(default="dev", alias="ENVIRONMENT")
 
+    # --- Data Source Configuration ---
+    data_source: str = Field(
+        default="excel",
+        alias="DATA_SOURCE",
+        description="Data source type: 'excel' or 'mysql'"
+    )
+
+    # --- MySQL Configuration ---
+    mysql_host: str = Field(default="localhost", alias="MYSQL_HOST")
+    mysql_port: int = Field(default=3306, alias="MYSQL_PORT")
+    mysql_database: str = Field(default="ai_insights", alias="MYSQL_DATABASE")
+    mysql_user: str = Field(default="root", alias="MYSQL_USER")
+    mysql_password: str = Field(default="", alias="MYSQL_PASSWORD")
+    mysql_table: str = Field(default="ai_usecases", alias="MYSQL_TABLE")
+    mysql_ssl_enabled: bool = Field(default=False, alias="MYSQL_SSL_ENABLED")
+    mysql_connection_pool_size: int = Field(default=5, alias="MYSQL_CONNECTION_POOL_SIZE")
+
+    # --- Query Observability ---
+    enable_sql_logging: bool = Field(default=True, alias="ENABLE_SQL_LOGGING")
+    show_generated_sql: bool = Field(default=True, alias="SHOW_GENERATED_SQL")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

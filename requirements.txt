@@ -31,3 +31,6 @@ commitizen==3.27.0
 fastapi
 uvicorn
 pydantic-settings
+mysql-connector-python>=8.0.0
+pymysql>=1.1.0
+sqlalchemy>=2.0.0

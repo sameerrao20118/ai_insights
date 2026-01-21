@@ -104,20 +104,29 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     return subset
 
 def load_all_usecases() -> List[AIUseCase]:
-    vdb = get_vdb()
-    if not vdb:
-        return []
+    """Load all use cases from configured data source (Excel or MySQL)."""
+    from data_sources import get_data_source
+    
+    try:
+        data_source = get_data_source()
+        usecases = data_source.load_all_usecases()
+        return usecases
+    except Exception as e:
+        # Fallback to vector DB method for backward compatibility
+        vdb = get_vdb()
+        if not vdb:
+            return []
 
-    results = vdb.search_similar("all use cases", k=500)
-    seen = {}
-    for r in results:
-        meta = dict(r["metadata"])
-        if not meta:
-            continue
-        uid = meta.get("UseCaseID")
-        if uid and uid not in seen:
-            seen[uid] = AIUseCase(**meta)
-    return list(seen.values())
+        results = vdb.search_similar("all use cases", k=500)
+        seen = {}
+        for r in results:
+            meta = dict(r["metadata"])
+            if not meta:
+                continue
+            uid = meta.get("UseCaseID")
+            if uid and uid not in seen:
+                seen[uid] = AIUseCase(**meta)
+        return list(seen.values())
 
 def answer_leader_question(question: str, df: pd.DataFrame, usecases: List[AIUseCase], decision_factors: dict, system_prompt_override: str = None) -> str:
     from admin.admin_utils import get_vdb

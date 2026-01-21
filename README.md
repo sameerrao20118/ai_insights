@@ -12,7 +12,10 @@ By following this guide, you will have:
 - ✅ A fully functional Streamlit web application
 - ✅ A REST API server for programmatic access
 - ✅ Integration with either local LLMs OR enterprise Azure/Gemini services
+- ✅ **Flexible data sources**: Excel files OR MySQL database
+- ✅ **Natural Language to SQL**: Query your MySQL database in plain English
 - ✅ Vector database for AI use case storage and retrieval
+- ✅ **Query observability**: See generated SQL for every query
 - ✅ Validated setup ready for production use
 
 ---
@@ -26,7 +29,8 @@ By following this guide, you will have:
 5. [Validation & Testing](#validation--testing)
 6. [Using the Application](#using-the-application)
 7. [API Testing with Postman](#api-testing-with-postman)
-8. [Troubleshooting](#troubleshooting)
+8. [MySQL Integration (Optional)](#mysql-integration)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -791,6 +795,85 @@ For each answer, verify:
 3. **Expect**: Strategic recommendations in JSON format
 
 ✅ **All endpoints validated!**
+
+---
+
+## MySQL Integration
+
+
+⚡ **NEW**: Use MySQL as your data source instead of Excel files!
+
+### Why Use MySQL?
+
+- **Live Data**: Connect to live databases instead of static Excel files
+- **Natural Language Queries**: Ask questions in plain English, get SQL automatically
+- **Query Observability**: See exactly what SQL is generated and executed
+- **Scalability**: Handle larger datasets efficiently
+- **Enterprise Ready**: Integrate with existing data infrastructure
+
+### Quick Start
+
+#### 1. Set up MySQL Database
+
+```bash
+# Run the schema setup script
+mysql -u root -p < scripts/setup_mysql_schema.sql
+```
+
+#### 2. Configure Data Source
+
+Edit your `.env` file:
+
+```bash
+DATA_SOURCE=mysql  # Switch from 'excel' to 'mysql'
+
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ai_insights
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_TABLE=ai_usecases
+```
+
+#### 3. Migrate Data (Optional)
+
+If you have existing Excel data:
+
+```bash
+python scripts/migrate_excel_to_mysql.py
+```
+
+#### 4. Start Using Natural Language Queries
+
+Navigate to **💬 Natural Language Query** tab in the web UI and ask questions like:
+
+- "Show me all projects with ROI greater than 200%"
+- "What is the average budget by team?"
+- "List all production projects"
+
+### Features
+
+| Feature | Excel | MySQL |
+|---------|-------|-------|
+| Data Storage | Static files | Live database |
+| Natural Language Queries | ❌ | ✅ |
+| SQL Generation | ❌ | ✅ |
+| Query Observability | ❌ | ✅ |
+| Large Datasets | Limited | ✅ |
+| Real-time Updates | ❌ | ✅ |
+| Dashboard & Analytics | ✅ | ✅ |
+| Leader Insights | ✅ | ✅ |
+
+### Complete Guide
+
+For detailed documentation, see **[MySQL Setup Guide](docs/MYSQL_SETUP.md)**:
+
+- Database schema setup
+- Connection configuration
+- Data migration
+- Natural language query examples
+- Troubleshooting
+- Security best practices
 
 ---
 
