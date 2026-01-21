@@ -1,9 +1,8 @@
-"""
-MySQL Database Schema Setup Script
-
-This script creates the required MySQL database structure for AI Insights.
-Run this script to set up your MySQL database before using the MySQL data source.
-"""
+-- MySQL Database Schema Setup Script
+--
+-- This script creates the required MySQL database structure for AI Insights.
+-- Run this script to set up your MySQL database before using the MySQL data source.
+--
 
 -- Create database
 CREATE DATABASE IF NOT EXISTS ai_insights

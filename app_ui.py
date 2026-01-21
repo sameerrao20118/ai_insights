@@ -9,6 +9,7 @@ from admin_components.bulk_import_tab import render_bulk_import_tab
 from admin_components.dashboard_tab import render_dashboard_tab
 from admin_components.manual_add_tab import render_manual_add_tab
 from admin_components.config_tab import render_config_tab
+from ui_components import render_database_selector, get_current_database
 from admin.admin_utils import get_vdb
 from data_sources import get_data_source
 import services_mysql
@@ -447,6 +448,10 @@ def render_nl_query_tab():
         st.info("Switch to MySQL data source in the Configuration tab to use this feature.")
         return
     
+    # Show current database
+    current_db = get_current_database()
+    st.info(f"🗄️ **Active Database**: `{current_db}`")
+    
     st.write(
         "Ask questions in plain English, and they will be automatically translated to SQL and executed against your MySQL database."
     )
@@ -454,7 +459,7 @@ def render_nl_query_tab():
     # Query input
     nl_question = st.text_area(
         "Enter your question",
-        placeholder="Example: Show me all projects with ROI greater than 200%",
+        placeholder="Example: Show me all customers and their orders",
         height=100,
     )
     
@@ -465,17 +470,17 @@ def render_nl_query_tab():
         else:
             with st.spinner("Translating to SQL and executing..."):
                 try:
-                    # Execute NL query
-                    result = services_mysql.query_with_nl(nl_question)
+                    # Execute NL query with selected database
+                    result = services_mysql.query_with_nl(nl_question, database=current_db)
                     
-                    # Show generated SQL
-                    if settings.show_generated_sql:
-                        st.markdown("### 📝 Generated SQL")
-                        st.code(result.sql, language="sql")
-                        
-                        if result.explanation:
-                            with st.expander("💡 Explanation"):
-                                st.write(result.explanation)
+                    
+                    # ALWAYS Show generated SQL (for debugging)
+                    st.markdown("### 📝 Generated SQL")
+                    st.code(result.sql, language="sql")
+                    
+                    if result.explanation:
+                        with st.expander("💡 Explanation"):
+                            st.write(result.explanation)
                     
                     # Show results
                     st.markdown("### 📊 Query Results")
@@ -500,19 +505,42 @@ def render_nl_query_tab():
                 
                 except Exception as e:
                     st.error(f"❌ Error executing query: {e}")
+                    
+                    # Show the SQL that failed (attached to exception)
+                    if hasattr(e, 'sql_query'):
+                        st.markdown("### 📝 Generated SQL (Failed)")
+                        st.code(e.sql_query, language="sql")
+                    
                     st.caption("Check the SQL syntax or try rephrasing your question")
     
-    # Sample questions
+    # Sample questions - database specific
     st.markdown("---")
     st.markdown("### 💡 Sample Questions")
     
-    sample_questions = [
-        "Show me all projects in production",
-        "What is the average budget by team?",
-        "List projects with ROI above 150%",
-        "Count projects by AI type",
-        "Show projects where budget exceeds 100000",
-    ]
+    # Different sample questions based on selected database
+    if current_db == "ai_insights":
+        sample_questions = [
+            "Show me all projects in production",
+            "What is the average budget by team?",
+            "List projects with ROI above 150%",
+            "Count projects by AI type",
+            "Show projects where budget exceeds 100000",
+        ]
+    elif current_db == "tpch":
+        sample_questions = [
+            "Show all orders with customer names",
+            "What is the total revenue by customer?",
+            "List orders from 2024",
+            "Which customers have the most orders?",
+            "Show order line items for order 1",
+        ]
+    else:
+        # Default generic questions
+        sample_questions = [
+            "Show all records",
+            "Count total rows",
+            "Show top 10 records",
+        ]
     
     cols = st.columns(2)
     for idx, question in enumerate(sample_questions):
@@ -521,6 +549,7 @@ def render_nl_query_tab():
             if st.button(f"📌 {question}", key=f"sample_{idx}"):
                 st.session_state["nl_question"] = question
                 st.rerun()
+
 
 
 def render_leader_insights():
@@ -724,6 +753,14 @@ def main():
 
     # Clean sidebar - no header duplication
     st.sidebar.markdown("---")
+    
+    # Database Selector (for MySQL mode)
+    from config import settings
+    if settings.data_source == "mysql":
+        st.sidebar.markdown("### 📊 Database Selection")
+        selected_db = render_database_selector()
+        st.sidebar.markdown("---")
+    
     st.sidebar.info("💡 Navigate using the menu below to explore AI initiatives, import data, and access leadership insights.")
     
     

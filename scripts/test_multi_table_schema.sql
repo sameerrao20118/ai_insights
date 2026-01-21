@@ -1,11 +1,10 @@
-"""
-Multi-Table Test Schema for Talk-to-Data
-
-This schema creates a realistic multi-table database for testing
-natural language to SQL translation with JOIN queries.
-
-Scenario: E-commerce system with customers, orders, products, and reviews.
-"""
+-- Multi-Table Test Schema for Talk-to-Data
+--
+-- This schema creates a realistic multi-table database for testing
+-- natural language to SQL translation with JOIN queries.
+--
+-- Scenario: E-commerce system with customers, orders, products, and reviews.
+--
 
 -- Drop tables if they exist (for clean setup)
 DROP TABLE IF EXISTS order_items;

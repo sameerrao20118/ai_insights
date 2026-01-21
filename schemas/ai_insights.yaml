@@ -1,0 +1,95 @@
+# AI Insights Database Schema Configuration
+
+database:
+  name: ai_insights
+  description: "AI project tracking and insights database"
+  
+tables:
+  categories:
+    description: "AI project categories"
+    primary_key: id
+    important_columns:
+      - name: "Category name"
+      - description: "Category description"
+      
+  products:
+    description: "AI products/projects"
+    primary_key: id
+    important_columns:
+      - name: "Project name"
+      - category_id: "Foreign key to categories"
+      - budget: "Project budget"
+      - roi_percentage: "Return on investment"
+      - status: "Project status"
+    foreign_keys:
+      - column: category_id
+        references: categories.id
+        
+  customers:
+    description: "Internal teams/customers"
+    primary_key: id
+    important_columns:
+      - name: "Customer/team name"
+      - email: "Contact email"
+      
+  orders:
+    description: "Project requests/orders"
+    primary_key: id
+    important_columns:
+      - customer_id: "Foreign key to customers"
+      - order_date: "Request date"
+      - total_amount: "Total budget"
+    foreign_keys:
+      - column: customer_id
+        references: customers.id
+        
+  order_items:
+    description: "Individual items in project requests"
+    primary_key: id
+    important_columns:
+      - order_id: "Foreign key to orders"
+      - product_id: "Foreign key to products"
+      - quantity: "Quantity requested"
+      - price: "Unit price"
+    foreign_keys:
+      - column: order_id
+        references: orders.id
+      - column: product_id
+        references: products.id
+
+join_paths:
+  products_to_category:
+    description: "Get category for a product"
+    path:
+      - from: products
+        to: categories
+        on: "products.category_id = categories.id"
+    example: "Show products by category"
+    
+  orders_to_customer:
+    description: "Get customer for an order"
+    path:
+      - from: orders
+        to: customers
+        on: "orders.customer_id = customers.id"
+    example: "Show orders by customer"
+    
+  order_items_to_product:
+    description: "Get product details for order items"
+    path:
+      - from: order_items
+        to: products
+        on: "order_items.product_id = products.id"
+      - from: products
+        to: categories
+        on: "products.category_id = categories.id"
+    example: "Show order items with product category"
+
+query_patterns:
+  count_projects:
+    template: "SELECT COUNT(*) FROM products"
+    description: "Count total AI projects"
+    
+  projects_by_status:
+    template: "SELECT status, COUNT(*) as count FROM products GROUP BY status"
+    description: "Count projects by status"

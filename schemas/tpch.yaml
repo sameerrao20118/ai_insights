@@ -1,0 +1,115 @@
+# TPC-H Database Schema Configuration
+# This file defines the logical schema and relationships for the LLM
+
+database:
+  name: tpch
+  description: "TPC-H benchmark database for order analytics"
+  
+tables:
+  REGION:
+    description: "Geographic regions"
+    primary_key: R_REGIONKEY
+    important_columns:
+      - R_NAME: "Region name (e.g., ASIA, EUROPE)"
+      
+  NATION:
+    description: "Countries/nations within regions"
+    primary_key: N_NATIONKEY
+    important_columns:
+      - N_NAME: "Nation name"
+      - N_REGIONKEY: "Foreign key to REGION"
+    foreign_keys:
+      - column: N_REGIONKEY
+        references: REGION.R_REGIONKEY
+        
+  CUSTOMER:
+    description: "Customer information"
+    primary_key: C_CUSTKEY
+    important_columns:
+      - C_NAME: "Customer name"
+      - C_NATIONKEY: "Foreign key to NATION"
+      - C_ACCTBAL: "Account balance"
+      - C_MKTSEGMENT: "Market segment"
+    foreign_keys:
+      - column: C_NATIONKEY
+        references: NATION.N_NATIONKEY
+        
+  ORDERS:
+    description: "Customer orders"
+    primary_key: O_ORDERKEY
+    important_columns:
+      - O_CUSTKEY: "Foreign key to CUSTOMER"
+      - O_ORDERSTATUS: "Order status (O/F/P)"
+      - O_TOTALPRICE: "Total price"
+      - O_ORDERDATE: "Order date"
+    foreign_keys:
+      - column: O_CUSTKEY
+        references: CUSTOMER.C_CUSTKEY
+        
+  LINEITEM:
+    description: "Individual line items within orders"
+    primary_key: [L_ORDERKEY, L_LINENUMBER]
+    important_columns:
+      - L_ORDERKEY: "Foreign key to ORDERS"
+      - L_QUANTITY: "Quantity ordered"
+      - L_EXTENDEDPRICE: "Extended price"
+      - L_DISCOUNT: "Discount"
+      - L_SHIPDATE: "Ship date"
+    foreign_keys:
+      - column: L_ORDERKEY
+        references: ORDERS.O_ORDERKEY
+
+# Explicit JOIN paths for common queries
+join_paths:
+  orders_to_country:
+    description: "Get country for an order"
+    path:
+      - from: ORDERS
+        to: CUSTOMER
+        on: "ORDERS.O_CUSTKEY = CUSTOMER.C_CUSTKEY"
+      - from: CUSTOMER
+        to: NATION
+        on: "CUSTOMER.C_NATIONKEY = NATION.N_NATIONKEY"
+    example: "Show orders by country"
+    
+  orders_to_region:
+    description: "Get region for an order"
+    path:
+      - from: ORDERS
+        to: CUSTOMER
+        on: "ORDERS.O_CUSTKEY = CUSTOMER.C_CUSTKEY"
+      - from: CUSTOMER
+        to: NATION
+        on: "CUSTOMER.C_NATIONKEY = NATION.N_NATIONKEY"
+      - from: NATION
+        to: REGION
+        on: "NATION.N_REGIONKEY = REGION.R_REGIONKEY"
+    example: "Show orders by region"
+    
+  lineitem_to_country:
+    description: "Get country for a line item"
+    path:
+      - from: LINEITEM
+        to: ORDERS
+        on: "LINEITEM.L_ORDERKEY = ORDERS.O_ORDERKEY"
+      - from: ORDERS
+        to: CUSTOMER
+        on: "ORDERS.O_CUSTKEY = CUSTOMER.C_CUSTKEY"
+      - from: CUSTOMER
+        to: NATION
+        on: "CUSTOMER.C_NATIONKEY = NATION.N_NATIONKEY"
+    example: "Show line items by country"
+
+# Common query patterns
+query_patterns:
+  count_orders:
+    template: "SELECT COUNT(*) FROM ORDERS"
+    description: "Count total orders"
+    
+  top_customers:
+    template: "SELECT C_NAME, COUNT(O_ORDERKEY) as order_count FROM CUSTOMER c LEFT JOIN ORDERS o ON c.C_CUSTKEY = o.O_CUSTKEY GROUP BY c.C_CUSTKEY, c.C_NAME ORDER BY order_count DESC"
+    description: "Find customers with most orders"
+    
+  max_quantity_order:
+    template: "SELECT o.O_ORDERKEY, n.N_NAME, l.L_QUANTITY FROM LINEITEM l INNER JOIN ORDERS o ON l.L_ORDERKEY = o.O_ORDERKEY INNER JOIN CUSTOMER c ON o.O_CUSTKEY = c.C_CUSTKEY INNER JOIN NATION n ON c.C_NATIONKEY = n.N_NATIONKEY ORDER BY l.L_QUANTITY DESC LIMIT 1"
+    description: "Find order with maximum quantity and its country"

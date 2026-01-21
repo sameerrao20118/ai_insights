@@ -1,0 +1,43 @@
+# Schema Configuration Template
+# Copy this file and customize for your database
+
+database:
+  name: your_database_name
+  description: "Brief description of what this database contains"
+  
+tables:
+  table_name_1:
+    description: "What this table represents"
+    primary_key: id_column  # or [col1, col2] for composite keys
+    important_columns:
+      - column_name: "Description of what this column contains"
+      - another_column: "Another description"
+    foreign_keys:  # Optional - only if this table references another
+      - column: foreign_key_column
+        references: other_table.id_column
+        
+  table_name_2:
+    description: "Another table description"
+    primary_key: id
+    important_columns:
+      - name: "Description"
+    # No foreign_keys if this table doesn't reference others
+
+# Define common JOIN paths to help LLM understand relationships
+join_paths:
+  descriptive_name:
+    description: "Human-readable description of this JOIN path"
+    path:
+      - from: table1
+        to: table2
+        on: "table1.fk_column = table2.pk_column"
+      - from: table2  # Continue chain if multi-hop
+        to: table3
+        on: "table2.another_fk = table3.pk"
+    example: "Example natural language question this path answers"
+
+# Optional: Pre-defined query patterns for common questions
+query_patterns:
+  pattern_name:
+    template: "SELECT ... FROM ... WHERE ..."
+    description: "What this query does"

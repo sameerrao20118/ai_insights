@@ -16,11 +16,20 @@ logger = logging.getLogger(__name__)
 class MySQLSource(DataSource):
     """MySQL database data source implementation."""
 
-    def __init__(self):
+    def __init__(self, database: str = None):
+        """
+        Initialize MySQL data source.
+        
+        Args:
+            database: Optional database name. If None, uses settings.mysql_database
+        """
+        # Use provided database or fall back to settings
+        target_database = database if database is not None else settings.mysql_database
+        
         self.config = {
             "host": settings.mysql_host,
             "port": settings.mysql_port,
-            "database": settings.mysql_database,
+            "database": target_database,  # Use dynamic database
             "user": settings.mysql_user,
             "password": settings.mysql_password,
         }
@@ -29,6 +38,7 @@ class MySQLSource(DataSource):
             self.config["ssl_disabled"] = False
         
         self.table_name = settings.mysql_table
+        self.database_name = target_database  # Store for reference
         self.connection_pool = None
         self._initialize_pool()
 
@@ -113,7 +123,30 @@ class MySQLSource(DataSource):
                 connection.close()
 
     def execute_query(self, sql: str) -> List[Dict[str, Any]]:
-        """Execute a SQL query and return results."""
+        """
+        Execute a SQL query and return results.
+        
+        Args:
+            sql: SQL query string
+            
+        Returns:
+            List of dictionaries representing rows
+        """
+        # Safety check: ensure SQL doesn't start with JSON
+        sql = sql.strip()
+        if sql.startswith('{'):
+            # This looks like JSON, try to extract SQL from it
+            try:
+                import json
+                data = json.loads(sql)
+                if 'sql' in data:
+                    sql = data['sql'].strip()
+                    logger.warning("Extracted SQL from JSON object in execute_query")
+                else:
+                    raise ValueError("SQL appears to be JSON but has no 'sql' field")
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ValueError(f"Invalid SQL: appears to be JSON format: {str(e)}")
+        
         connection = None
         cursor = None
         try:
@@ -195,14 +228,14 @@ class MySQLSource(DataSource):
             connection = self._get_connection()
             cursor = connection.cursor(dictionary=True)
             
-            # Get all tables in the database
+            # Get all tables in the database (use self.database_name for multi-DB support)
             cursor.execute("""
                 SELECT TABLE_NAME, TABLE_ROWS, TABLE_COMMENT
                 FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_SCHEMA = %s
                 AND TABLE_TYPE = 'BASE TABLE'
                 ORDER BY TABLE_NAME
-            """, (settings.mysql_database,))
+            """, (self.database_name,))
             tables = cursor.fetchall()
             
             # For each table, get columns
@@ -216,7 +249,7 @@ class MySQLSource(DataSource):
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
                     ORDER BY ORDINAL_POSITION
-                """, (settings.mysql_database, table_name))
+                """, (self.database_name, table_name))
                 columns = cursor.fetchall()
                 
                 # Get foreign keys
@@ -230,7 +263,7 @@ class MySQLSource(DataSource):
                     WHERE TABLE_SCHEMA = %s 
                     AND TABLE_NAME = %s
                     AND REFERENCED_TABLE_NAME IS NOT NULL
-                """, (settings.mysql_database, table_name))
+                """, (self.database_name, table_name))
                 foreign_keys = cursor.fetchall()
                 
                 table_schemas[table_name] = {

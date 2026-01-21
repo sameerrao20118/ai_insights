@@ -24,6 +24,20 @@ services:
     networks:
       - ai_insights_network
 
+  adminer:
+    image: adminer:latest
+    container_name: ai_insights_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+      ADMINER_DESIGN: nette
+    depends_on:
+      - mysql
+    networks:
+      - ai_insights_network
+
 volumes:
   mysql_data:
     driver: local

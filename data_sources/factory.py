@@ -1,50 +1,76 @@
 """
-Factory for creating data source instances.
+Factory for creating database-specific data sources.
+Supports multi-database selection via UI.
 """
-import logging
 from typing import Optional
-
+from config import settings
 from .base import DataSource
 from .excel_source import ExcelSource
 from .mysql_source import MySQLSource
-from config import settings
+import logging
 
 logger = logging.getLogger(__name__)
 
-_data_source_instance: Optional[DataSource] = None
+# Singleton instances per database
+_mysql_sources = {}
+_excel_source = None
 
 
-def get_data_source(force_reload: bool = False) -> DataSource:
+def get_data_source(database: Optional[str] = None) -> DataSource:
     """
-    Factory function to get the appropriate data source based on configuration.
+    Get appropriate data source based on configuration.
     
     Args:
-        force_reload: If True, create a new instance even if one exists
-        
+        database: Optional MySQL database name (for MySQL data source only)
+    
     Returns:
-        DataSource instance (ExcelSource or MySQLSource)
+        DataSource instance
     """
-    global _data_source_instance
-
-    if _data_source_instance is not None and not force_reload:
-        return _data_source_instance
-
-    source_type = settings.data_source.lower()
-
-    if source_type == "mysql":
-        logger.info("Initializing MySQL data source")
-        _data_source_instance = MySQLSource()
-    elif source_type == "excel":
-        logger.info("Initializing Excel data source")
-        _data_source_instance = ExcelSource()
+    global _mysql_sources, _excel_source
+    
+    if settings.data_source == "mysql":
+        # Use provided database or default
+        db_name = database if database is not None else settings.mysql_database
+        
+        # Create singleton per database
+        if db_name not in _mysql_sources:
+            logger.info(f"Creating MySQL data source for database: {db_name}")
+            _mysql_sources[db_name] = MySQLSource(database=db_name)
+        
+        return _mysql_sources[db_name]
+    
+    elif settings.data_source == "excel":
+        if _excel_source is None:
+            logger.info("Creating Excel data source")
+            _excel_source = ExcelSource()
+        return _excel_source
+    
     else:
-        logger.warning(f"Unknown data source type: {source_type}, defaulting to Excel")
-        _data_source_instance = ExcelSource()
+        raise ValueError(f"Unknown data source: {settings.data_source}")
 
-    return _data_source_instance
+
+def get_mysql_source(database: Optional[str] = None) -> MySQLSource:
+    """
+    Get MySQL data source for specific database.
+    
+    Args:
+        database: Database name. If None, uses default from settings
+    
+    Returns:
+        MySQLSource instance
+    """
+    db_name = database if database is not None else settings.mysql_database
+    
+    if db_name not in _mysql_sources:
+        logger.info(f"Creating MySQL source for database: {db_name}")
+        _mysql_sources[db_name] = MySQLSource(database=db_name)
+    
+    return _mysql_sources[db_name]
 
 
 def reset_data_source():
-    """Reset the data source instance (useful for testing or reconfiguration)."""
-    global _data_source_instance
-    _data_source_instance = None
+    """Reset/clear cached data sources."""
+    global _mysql_sources, _excel_source
+    _mysql_sources = {}
+    _excel_source = None
+    logger.info("Data source cache cleared")
